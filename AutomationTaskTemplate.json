@@ -1,0 +1,189 @@
+{
+    "id": "Practice101",
+    "title": "Practice101",
+    "description": "Made for the purpose of trying out what the hell this is",
+    "iconType": "ScheduledTask",
+    "skuType": "Consumption",
+    "data": {
+        "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+                "$connections": {
+                    "defaultValue": {},
+                    "type": "Object"
+                }
+            },
+            "triggers": {
+                "Recurrence": {
+                    "recurrence": {
+                        "frequency": "Month",
+                        "interval": 1
+                    },
+                    "evaluatedRecurrence": {
+                        "frequency": "Month",
+                        "interval": 1
+                    },
+                    "type": "Recurrence"
+                }
+            },
+            "actions": {
+                "Compose": {
+                    "runAfter": {
+                        "Filter_array": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Compose",
+                    "inputs": "@body('Filter_array')"
+                },
+                "Filter_array": {
+                    "runAfter": {
+                        "Invoke_resource_operation_in_provider": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Query",
+                    "inputs": {
+                        "from": "@body('Invoke_resource_operation_in_provider')?['properties']?['rows']",
+                        "where": "@equals(item()[3], toLower(parameters('ResourceId')))"
+                    }
+                },
+                "Invoke_resource_operation_in_provider": {
+                    "runAfter": {},
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "body": {
+                            "dataSet": {
+                                "aggregation": {
+                                    "totalCost": {
+                                        "function": "Sum",
+                                        "name": "PreTaxCost"
+                                    },
+                                    "totalCostUSD": {
+                                        "function": "Sum",
+                                        "name": "PreTaxCostUSD"
+                                    }
+                                },
+                                "granularity": "None",
+                                "grouping": [
+                                    {
+                                        "name": "ResourceGroupName",
+                                        "type": "Dimension"
+                                    },
+                                    {
+                                        "name": "ResourceId",
+                                        "type": "Dimension"
+                                    },
+                                    {
+                                        "name": "ChargeType",
+                                        "type": "Dimension"
+                                    },
+                                    {
+                                        "name": "PublisherType",
+                                        "type": "Dimension"
+                                    }
+                                ]
+                            },
+                            "timePeriod": {
+                                "from": "@{addToTime(utcNow(), -1, 'Month')}",
+                                "to": "@{utcNow()}"
+                            },
+                            "timeframe": "Custom",
+                            "type": "ActualCost"
+                        },
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['arm']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "path": "/subscriptions/@{encodeURIComponent(parameters('SubscriptionId'))}/providers/@{encodeURIComponent('Microsoft.CostManagement')}/@{encodeURIComponent('query')}",
+                        "queries": {
+                            "x-ms-api-version": "2019-11-01"
+                        }
+                    }
+                },
+                "Send_an_email_(V2)": {
+                    "runAfter": {
+                        "Compose": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "body": {
+                            "Body": "<p>The monthly cost for resource<strong> </strong><strong>@{first(body('Filter_array'))[3]}</strong><strong> </strong>is<strong>&nbsp;<br>\n</strong><strong>@{first(body('Filter_array'))[0]}</strong><strong> </strong><strong>@{first(body('Filter_array'))[6]}</strong><strong></strong>.</p>",
+                            "Subject": "Monthly cost for resource",
+                            "To": "@parameters('EmailId')"
+                        },
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['office365']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "path": "/v2/Mail"
+                    }
+                }
+            },
+            "outputs": {}
+        },
+        "parameters": {
+            "EmailId": {
+                "type": "String",
+                "defaultValue": "60",
+                "metadata": {
+                    "displayName": "Email",
+                    "format": "",
+                    "required": true,
+                    "description": "Practice sending"
+                }
+            },
+            "ResourceId": {
+                "type": "String",
+                "defaultValue": "60",
+                "metadata": {
+                    "displayName": "Number of",
+                    "format": "",
+                    "required": true,
+                    "description": "Number of times units that the virtual machine is idle"
+                }
+            },
+            "SubscriptionId": {
+                "type": "String",
+                "metadata": {
+                    "allowedValues": [
+                        "Month",
+                        "Week",
+                        "Day",
+                        "Hour",
+                        "Minute",
+                        "Seconds"
+                    ],
+                    "displayName": "Frequency",
+                    "required": true,
+                    "description": "How often should schedule run. i.e. Weekly"
+                }
+            }
+        },
+        "connections": {
+            "arm": {
+                "id": "/subscriptions/0000-0000/providers/Microsoft.Web/locations/eastus/managedApis/arm",
+                "connectionId": "",
+                "connectionName": ""
+            },
+            "office365": {
+                "id": "/subscriptions/0000-0000/providers/Microsoft.Web/locations/eastus/managedApis/office365",
+                "connectionId": "",
+                "connectionName": ""
+            }
+        }
+    },
+    "supportedResources": [
+        "Microsoft.Resources/resourceGroups"
+    ],
+    "excludeResources": [
+        "Microsoft.Resources/resourceGroups"
+    ]
+}
